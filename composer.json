@@ -1,0 +1,29 @@
+{
+  "name": "wpsmith/templates",
+  "description": "WordPress templates.",
+  "keywords": [
+    "wordpress",
+    "widgets"
+  ],
+  "homepage": "https://github.com/wpsmith/Templates",
+  "license": "GPL-2.0+",
+  "authors": [
+    {
+      "name": "Travis Smith",
+      "email": "t@wpsmith.net",
+      "homepage": "http://wpsmith.net/",
+      "role": "Developer"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/wpsmith/Templates/issues"
+  },
+  "require": {
+    "php": ">=5.2.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "WPS\\Templates\\": "src/"
+    }
+  }
+}
