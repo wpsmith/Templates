@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-if ( ! class_exists( __NAMESPACE__ . '\Template_Loader' ) ) {
+if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 	/**
 	 * Template loader.
 	 *
@@ -35,7 +35,7 @@ if ( ! class_exists( __NAMESPACE__ . '\Template_Loader' ) ) {
 	 *
 	 * @package WPS\WP
 	 */
-	class Template_Loader {
+	class TemplateLoader {
 
 		/**
 		 * Prefix for filter names.

@@ -8,28 +8,28 @@
  * Any modifications to or software including (via compiler) GPL-licensed code must also be made
  * available under the GPL along with build & install instructions.
  *
- * @package    WPS\Templates
+ * @package    WPS\WP
  * @author     Travis Smith <t@wpsmith.net>
- * @copyright  2015-2018 Travis Smith
+ * @copyright  2015-2019 Travis Smith
  * @license    http://opensource.org/licenses/gpl-2.0.php GNU Public License v2
  * @link       https://github.com/wpsmith/WPS
  * @version    1.0.0
  * @since      0.1.0
  */
 
-namespace WPS\Templates;
+namespace WPS\WP\Templates;
 
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-if ( ! class_exists( 'WPS\Templates\Simple_Sidebars' ) ) {
+if ( ! class_exists( __NAMESPACE__ . '\SimpleSidebars' ) ) {
 	/**
-	 * Class Simple_Sidebars
-	 * @package WPS\Templates
+	 * Class SimpleSidebars
+	 * @package WPS\WP
 	 */
-	class Simple_Sidebars {
+	class SimpleSidebars {
 
 		/**
 		 * Post Type
@@ -186,16 +186,16 @@ if ( ! class_exists( 'WPS\Templates\Simple_Sidebars' ) ) {
 
 			if ( function_exists( 'genesis_register_widget_area' ) ) {
 				genesis_register_widget_area( array(
-					'name'        => __( $post_type->label . ' Widget Area', WPS_TEXT_DOMAIN ),
+					'name'        => __( $post_type->label . ' Widget Area', 'wps' ),
 					'id'          => $this->post_type . '-primary',
-					'description' => sprintf( '%s %s.', __( 'This is the primary sidebar for', WPS_TEXT_DOMAIN ), $post_type->label ),
+					'description' => sprintf( '%s %s.', __( 'This is the primary sidebar for', 'wps' ), $post_type->label ),
 				) );
 
 				if ( $this->has_3_column_layout() ) {
 					genesis_register_widget_area( array(
-						'name'        => __( $post_type->label . ' Widget Area', WPS_TEXT_DOMAIN ),
+						'name'        => __( $post_type->label . ' Widget Area', 'wps' ),
 						'id'          => $this->post_type . '-secondary',
-						'description' => sprintf( '%s %s.', __( 'This is the primary sidebar for', WPS_TEXT_DOMAIN ), $post_type->label ),
+						'description' => sprintf( '%s %s.', __( 'This is the primary sidebar for', 'wps' ), $post_type->label ),
 					) );
 				}
 			}
