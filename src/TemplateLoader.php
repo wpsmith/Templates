@@ -231,7 +231,7 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 
 				// Try locating this template file by looping through the template paths.
 				foreach ( $template_paths as $template_path ) {
-					if ( file_exists( $template_path . $template_name ) ) {
+					if ( file_exists( $template_path . $template_name ) && is_file( $template_path . $template_name ) ) {
 						$located = $template_path . $template_name;
 						break 2;
 					}
