@@ -222,6 +222,7 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 			// Remove empty entries.
 			$template_names = array_filter( (array) $template_names );
 			$template_paths = $this->get_template_paths();
+			array_unshift( $template_names, implode( '-', $template_names ) );
 
 			// Try to find a template file.
 			foreach ( $template_names as $template_name ) {
