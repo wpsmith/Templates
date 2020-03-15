@@ -10,11 +10,11 @@
  *
  * @package    WPS\WP
  * @author     Travis Smith <t@wpsmith.net>
- * @copyright  2015-2019 Travis Smith
+ * @copyright  2015-2020 Travis Smith
  * @license    http://opensource.org/licenses/gpl-2.0.php GNU Public License v2
- * @link       https://github.com/wpsmith/WPS
- * @version    1.2.0
- * @since      0.1.0
+ * @link       https://github.com/wpsmith/Templates
+ * @version    0.1.0
+ * @since      0.0.1
  */
 
 namespace WPS\WP\Templates;
@@ -42,18 +42,18 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 		 *
 		 * An _ will be added at the end,
 		 *
-		 * @example 'your_plugin'.
+		 * @example 'plugin_prefix'.
 		 * @var string
 		 */
-		protected $filter_prefix = 'yourplugin'; // or.
+		protected $prefix = 'yourplugin';
 
 		/**
 		 * Directory name where custom templates for this plugin should be found in the theme.
 		 *
-		 * @example 'your-plugin-templates'.
+		 * @example 'plugin-templates'.
 		 * @var string
 		 */
-		protected $theme_template_directory = 'templates'; // or 'your-plugin' or 'your-plugin-templates' etc.
+		protected $theme_template_directory = 'templates';
 
 		/**
 		 * Reference to the root directory path of this plugin.
@@ -76,24 +76,44 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 		protected $templates_directory = 'templates';
 
 		/**
-		 * Template_Loader constructor.
+		 * Internal use only: Store located template paths.
+		 *
+		 * @var array
+		 */
+		private $template_path_cache = [];
+
+		/**
+		 * Internal use only: Store variable names used for template data.
+		 *
+		 * Means unset_template_data() can remove all custom references from $wp_query.
+		 *
+		 * Initialized to contain the default 'yourplugin_data'.
+		 *
+		 * @var array
+		 */
+		private $template_data_var_names = [];
+
+		/**
+		 * TemplateLoader constructor.
 		 *
 		 * @param array $args Loader Args.
 		 */
-		public function __construct( $args = array() ) {
+		public function __construct( $args = [] ) {
 
 			if ( ! empty( $args ) ) {
 
-				$defaults = array(
-					'filter_prefix'            => 'yourplugin',
-					// or 'your_plugin'.
+				// Backwards compatibility.
+				if ( isset( $args['filter_prefix'] ) ) {
+					$args['prefix'] = $args['filter_prefix'];
+					unset( $args['filter_prefix'] );
+				}
+
+				$defaults = [
+					'prefix'                   => 'yourplugin',
 					'theme_template_directory' => 'templates',
-					// or 'your-plugin' or 'your-plugin-templates' etc.
-					'plugin_directory'         => 'yourplugin',
-					// or YOUR_PLUGIN_DIR or plugin_dir_path( dirname( __FILE__ ) ); etc.
+					'plugin_directory'         => 'plugin-templates',
 					'templates_directory'      => 'templates',
-					// or includes/templates, etc.
-				);
+				];
 
 				$args = wp_parse_args( $args, $defaults );
 
@@ -102,24 +122,6 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 				}
 			}
 
-			$this->init( $this );
-
-		}
-
-		/**
-		 * Initializes loader.
-		 *
-		 * @param self $obj Template Loader.
-		 */
-		public function init( $obj ) {
-
-			if ( method_exists( $obj, 'loaded' ) ) {
-				if ( ! did_action( 'after_setup_theme' ) ) {
-					add_action( 'after_setup_theme', array( $obj, 'loaded' ), 99 );
-				} else {
-					$this->loaded();
-				}
-			}
 		}
 
 		/**
@@ -130,6 +132,37 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 		}
 
 		/**
+		 * Make custom data available to template.
+		 *
+		 * Data is available to the template as properties under the `${PREFIX}_data` variable.
+		 * i.e. A value provided here under `${PREFIX}_data['foo']` is available as `${PREFIX}_data->foo`.
+		 *
+		 * When an input key has a hyphen, you can use `${PREFIX}_data->{foo-bar}` in the template.
+		 *
+		 * @param mixed $data Custom data for the template.
+		 * @param string $var_name Optional. Variable under which the custom data is available in the template.
+		 *                         Default is '{PREFIX}_data'.
+		 *
+		 * @return self
+		 */
+		public function set_template_data( $data, $var_name = '' ) {
+			global $wp_query;
+
+			// Default to 'yourplugin_data'.
+			$var_name = '' === $var_name ? $this->get_prefix() . '_data' : $var_name;
+
+			// Set data to query vars.
+			$wp_query->query_vars[ $var_name ] = (object) $data;
+
+			// Add $var_name to custom variable store if not default value.
+			if ( $this->get_prefix() . '_data' !== $var_name ) {
+				$this->template_data_var_names[] = $var_name;
+			}
+
+			return $this;
+		}
+
+		/**
 		 * Remove access to custom data in template.
 		 *
 		 * Good to use once the final template part has been requested.
@@ -137,26 +170,50 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 		public function unset_template_data() {
 			global $wp_query;
 
-			if ( isset( $wp_query->query_vars['data'] ) ) {
-				unset( $wp_query->query_vars['data'] );
+			// Remove any duplicates from the custom variable store.
+			$custom_var_names = array_unique( $this->template_data_var_names );
+
+			// Remove each custom data reference from $wp_query.
+			foreach ( $custom_var_names as $var ) {
+				if ( isset( $wp_query->query_vars[ $var ] ) ) {
+					unset( $wp_query->query_vars[ $var ] );
+				}
 			}
+
+			return $this;
+		}
+
+		/**
+		 * Loads a template part.
+		 *
+		 * @param string $slug Template slug.
+		 * @param string $name Optional. Default null.
+		 *
+		 * @return string
+		 *
+		 */
+		public function load_template_part( $slug, $name = null ) {
+
+			return $this->get_template_part( $slug, $name, true );
+
 		}
 
 		/**
 		 * Retrieve a template part.
 		 *
-		 * @uses  self::get_template_possble_parts() Create file names of templates.
-		 * @uses  self::locate_template() Retrieve the name of the highest priority template file that exists.
-		 *
 		 * @param string $slug Template slug.
 		 * @param string $name Optional. Default null.
-		 * @param bool   $load Optional. Default false.
+		 * @param bool $load Optional. Default false.
 		 *
 		 * @return string
+		 * @uses  self::get_template_file_names() Create file names of templates.
+		 * @uses  self::locate_template() Retrieve the name of the highest priority template file that exists.
+		 *
 		 */
 		public function get_template_part( $slug, $name = null, $load = false ) {
 			// Execute code for this part.
 			do_action( 'get_template_part_' . $slug, $slug, $name );
+			do_action( $this->get_prefix() . '_get_template_part_' . $slug, $slug, $name );
 
 			// Get files names of templates, for given slug and name.
 			$templates = $this->get_template_file_names( $slug, $name );
@@ -168,7 +225,10 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 		/**
 		 * Given a slug and optional name, create the file names of templates.
 		 *
-		 * @since 1.0.0
+		 * Templates will be:
+		 *  - $slug-$name.php
+		 *  - $name.php
+		 *  - $slug.php
 		 *
 		 * @param string $slug Template slug.
 		 * @param string $name Template name.
@@ -176,7 +236,7 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 		 * @return array
 		 */
 		protected function get_template_file_names( $slug, $name ) {
-			$templates = array();
+			$templates = [];
 			if ( isset( $name ) ) {
 				$templates[] = $slug . '-' . $name . '.php';
 			}
@@ -189,14 +249,13 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 			 * The resulting array should be in the order of most specific first, to least specific last.
 			 * e.g. 0 => recipe-instructions.php, 1 => recipe.php
 			 *
-			 * @since 1.0.0
+			 * @param array $templates Names of template files that should be looked for, for given slug and name.
+			 * @param string $slug Template slug.
+			 * @param string $name Template name.
 			 *
-			 * @param array  $templates Names of template files that should be looked for, for given slug and name.
-			 * @param string $slug      Template slug.
-			 * @param string $name      Template name.
+			 * @since 0.0.1
 			 */
-
-			return apply_filters( $this->filter_prefix . '_get_template_part', $templates, $slug, $name );
+			return apply_filters( $this->get_prefix() . '_get_template_part', $templates, $slug, $name );
 		}
 
 		/**
@@ -206,36 +265,49 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 		 * inherit from a parent theme can just overload one file. If the template is
 		 * not found in either of those, it looks in the theme-compat folder last.
 		 *
-		 * @uses  self::get_template_paths() Return a list of paths to check for template locations.
-		 *
 		 * @param string|array $template_names Template file(s) to search for, in order.
-		 * @param bool         $load           If true the template file will be loaded if it is found.
-		 * @param bool         $require_once   Whether to require_once or require. Default true.
+		 * @param bool $load If true the template file will be loaded if it is found.
+		 * @param bool $require_once Whether to require_once or require. Default true.
 		 *                                     Has no effect if $load is false.
 		 *
 		 * @return string The template filename if one is located.
+		 * @uses  self::get_template_paths() Return a list of paths to check for template locations.
+		 *
 		 */
 		public function locate_template( $template_names, $load = false, $require_once = true ) {
-			// No file found yet.
-			$located = false;
 
-			// Remove empty entries.
-			$template_names = array_filter( (array) $template_names );
-			$template_paths = $this->get_template_paths();
-			array_unshift( $template_names, implode( '-', $template_names ) );
+			// Use $template_names as a cache key - either first element of array or the variable itself if it's a string.
+			$cache_key = is_array( $template_names ) ? $template_names[0] : $template_names;
 
-			// Try to find a template file.
-			foreach ( $template_names as $template_name ) {
-				// Trim off any slashes from the template name.
-				$template_name = str_replace( ' ', '-', ltrim( $template_name, '/' ) );
+			// If the key is in the cache array, we've already located this file.
+			if ( isset( $this->template_path_cache[ $cache_key ] ) ) {
+				$located = $this->template_path_cache[ $cache_key ];
+			} else {
 
-				// Try locating this template file by looping through the template paths.
-				foreach ( $template_paths as $template_path ) {
-					if ( file_exists( $template_path . $template_name ) && is_file( $template_path . $template_name ) ) {
-						$located = $template_path . $template_name;
-						break 2;
+				// No file found yet.
+				$located = false;
+
+				// Remove empty entries.
+				$template_names = array_filter( (array) $template_names );
+				$template_paths = $this->get_template_paths();
+
+				// Try to find a template file.
+				foreach ( $template_names as $template_name ) {
+					// Trim off any slashes from the template name & replace any spaces with dashes.
+					$template_name = str_replace( ' ', '-', ltrim( $template_name, '/' ) );
+
+					// Try locating this template file by looping through the template paths.
+					foreach ( $template_paths as $template_path ) {
+						if ( file_exists( $template_path . $template_name ) && is_file( $template_path . $template_name ) ) {
+							$located = $template_path . $template_name;
+
+							// Store the template path in the cache.
+							$this->template_path_cache[ $cache_key ] = $located;
+							break 2;
+						}
 					}
 				}
+
 			}
 
 			if ( $load && $located ) {
@@ -257,10 +329,10 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 		protected function get_template_paths() {
 			$theme_directory = trailingslashit( $this->theme_template_directory );
 
-			$file_paths = array(
+			$file_paths = [
 				10  => trailingslashit( get_template_directory() ) . $theme_directory,
 				100 => $this->get_templates_dir(),
-			);
+			];
 
 			// Only add this conditionally, so non-child themes don't redundantly check active theme twice.
 			if ( $this->is_child_theme() ) {
@@ -270,11 +342,12 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 			/**
 			 * Allow ordered list of template paths to be amended.
 			 *
-			 * @since 1.0.0
-			 *
 			 * @param array $var Default is directory in child theme at index 1, parent theme at 10, and plugin at 100.
+			 *
+			 * @since 0.0.1
+			 *
 			 */
-			$file_paths = apply_filters( $this->filter_prefix . '_template_paths', $file_paths );
+			$file_paths = apply_filters( $this->get_prefix() . '_template_paths', $file_paths );
 
 			// sort the file paths based on priority.
 			ksort( $file_paths, SORT_NUMERIC );
@@ -296,14 +369,21 @@ if ( ! class_exists( __NAMESPACE__ . '\TemplateLoader' ) ) {
 		/**
 		 * Return the path to the templates directory in this plugin.
 		 *
-		 * May be overridden in subclass.
-		 *
 		 * @return string
 		 */
 		protected function get_templates_dir() {
 
 			return trailingslashit( $this->plugin_directory ) . $this->templates_directory;
 
+		}
+
+		/**
+		 * Gets the sanitized prefix.
+		 *
+		 * @return string
+		 */
+		private function get_prefix() {
+			return str_replace( '-', '_', $this->prefix );
 		}
 
 	}
